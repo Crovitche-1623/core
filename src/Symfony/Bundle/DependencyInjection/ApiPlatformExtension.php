@@ -34,6 +34,7 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\FilterInterface;
 use ApiPlatform\Metadata\UriVariableTransformerInterface;
 use ApiPlatform\Metadata\UrlGeneratorInterface;
+use ApiPlatform\OpenApi\Model\Tag;
 use ApiPlatform\RamseyUuid\Serializer\UuidDenormalizer;
 use ApiPlatform\State\ApiResource\Error;
 use ApiPlatform\State\ParameterProviderInterface;
@@ -114,7 +115,7 @@ final class ApiPlatformExtension extends Extension implements PrependExtensionIn
         $jsonSchemaFormats = $config['jsonschema_formats'];
 
         if (!$jsonSchemaFormats) {
-            foreach (array_keys($formats) as $f) {
+            foreach (array_merge(array_keys($formats), array_keys($errorFormats)) as $f) {
                 // Distinct JSON-based formats must have names that start with 'json'
                 if (str_starts_with($f, 'json')) {
                     $jsonSchemaFormats[$f] = true;
@@ -500,6 +501,7 @@ final class ApiPlatformExtension extends Extension implements PrependExtensionIn
         $container->setParameter('api_platform.enable_swagger_ui', $config['enable_swagger_ui']);
         $container->setParameter('api_platform.enable_re_doc', $config['enable_re_doc']);
         $container->setParameter('api_platform.swagger.api_keys', $config['swagger']['api_keys']);
+        $container->setParameter('api_platform.swagger.persist_authorization', $config['swagger']['persist_authorization']);
         $container->setParameter('api_platform.swagger.http_auth', $config['swagger']['http_auth']);
         if ($config['openapi']['swagger_ui_extra_configuration'] && $config['swagger']['swagger_ui_extra_configuration']) {
             throw new RuntimeException('You can not set "swagger_ui_extra_configuration" twice - in "openapi" and "swagger" section.');
@@ -810,7 +812,11 @@ final class ApiPlatformExtension extends Extension implements PrependExtensionIn
             return;
         }
 
-        $clientClass = class_exists(\Elasticsearch\Client::class) ? \Elasticsearch\Client::class : \Elastic\Elasticsearch\Client::class;
+        $clientClass = !class_exists(\Elasticsearch\Client::class)
+            // ES v7
+            ? \Elastic\Elasticsearch\Client::class
+            // ES v8 and up
+            : \Elasticsearch\Client::class;
 
         $clientDefinition = new Definition($clientClass);
         $container->setDefinition('api_platform.elasticsearch.client', $clientDefinition);
@@ -851,6 +857,13 @@ final class ApiPlatformExtension extends Extension implements PrependExtensionIn
         $container->setParameter('api_platform.openapi.license.name', $config['openapi']['license']['name']);
         $container->setParameter('api_platform.openapi.license.url', $config['openapi']['license']['url']);
         $container->setParameter('api_platform.openapi.overrideResponses', $config['openapi']['overrideResponses']);
+
+        $tags = [];
+        foreach ($config['openapi']['tags'] as $tag) {
+            $tags[] = new Tag($tag['name'], $tag['description'] ?? null);
+        }
+
+        $container->setParameter('api_platform.openapi.tags', $tags);
 
         $loader->load('json_schema.xml');
     }

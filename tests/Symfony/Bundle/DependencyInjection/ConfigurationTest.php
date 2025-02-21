@@ -153,6 +153,7 @@ class ConfigurationTest extends TestCase
                 'api_keys' => [],
                 'http_auth' => [],
                 'swagger_ui_extra_configuration' => [],
+                'persist_authorization' => false,
             ],
             'eager_loading' => [
                 'enabled' => true,
@@ -218,6 +219,7 @@ class ConfigurationTest extends TestCase
                 ],
                 'swagger_ui_extra_configuration' => [],
                 'overrideResponses' => true,
+                'tags' => [],
             ],
             'maker' => [
                 'enabled' => true,
@@ -413,5 +415,24 @@ class ConfigurationTest extends TestCase
 
         $this->assertArrayHasKey('http_auth', $config['swagger']);
         $this->assertSame(['scheme' => 'bearer', 'bearerFormat' => 'JWT'], $config['swagger']['http_auth']['PAT']);
+    }
+
+    /**
+     * Test openapi tags.
+     */
+    public function testOpenApiTags(): void
+    {
+        $config = $this->processor->processConfiguration($this->configuration, [
+            'api_platform' => [
+                'openapi' => [
+                    'tags' => [
+                        ['name' => 'test', 'description' => 'test2'],
+                        ['name' => 'test3'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertEquals(['name' => 'test3', 'description' => null], $config['openapi']['tags'][1]);
     }
 }

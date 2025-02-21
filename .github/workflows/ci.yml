@@ -39,7 +39,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -99,7 +99,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -136,7 +136,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     env:
       APP_DEBUG: '1' # https://github.com/phpstan/phpstan-symfony/issues/37
@@ -201,10 +201,11 @@ jobs:
         php:
           - '8.2'
           - '8.3'
+          - '8.4'
         include:
           - php: '8.2'
-            coverage: true
           - php: '8.3'
+          - php: '8.4'
             coverage: true
       fail-fast: false
     steps:
@@ -245,7 +246,7 @@ jobs:
         continue-on-error: true
       - name: Upload coverage results to Codecov
         if: matrix.coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: build/logs/phpunit
           name: phpunit-php${{ matrix.php }}
@@ -271,6 +272,7 @@ jobs:
         php:
           - '8.2'
           - '8.3'
+          - '8.4'
         component:
           - api-platform/doctrine-common
           - api-platform/doctrine-orm
@@ -290,8 +292,8 @@ jobs:
           - api-platform/validator
         include:
           - php: '8.2'
-            coverage: true
           - php: '8.3'
+          - php: '8.4'
             coverage: true
       fail-fast: false
     steps:
@@ -323,7 +325,7 @@ jobs:
         continue-on-error: true
       - name: Upload coverage results to Codecov
         if: matrix.coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: /tmp/build/logs/phpunit
           name: phpunit-php${{ matrix.php }}
@@ -349,13 +351,12 @@ jobs:
         php:
           - '8.2'
           - '8.3'
+          - '8.4'
         include:
           - php: '8.2'
-            coverage: true
           - php: '8.3'
+          - php: '8.4'
             coverage: true
-          - php: '8.3'
-            coverage: false
       fail-fast: false
     steps:
       - name: Checkout
@@ -405,7 +406,7 @@ jobs:
         continue-on-error: true
       - name: Upload coverage results to Codecov
         if: matrix.coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: build/logs/behat
           name: behat-php${{ matrix.php }}
@@ -449,7 +450,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     env:
       APP_ENV: postgres
@@ -499,7 +500,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     services:
       mysql:
@@ -549,8 +550,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.2'
-          - '8.3'
+          - '8.4'
       fail-fast: false
     env:
       APP_ENV: mongodb
@@ -615,7 +615,7 @@ jobs:
           path: build/logs/behat
         continue-on-error: true
       - name: Upload coverage results to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: build/logs/behat
           name: behat-php${{ matrix.php }}
@@ -638,8 +638,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.2'
-          - '8.3'
+          - '8.4'
       fail-fast: false
     env:
       APP_ENV: mercure
@@ -706,7 +705,7 @@ jobs:
           path: build/logs/behat
         continue-on-error: true
       - name: Upload coverage results to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: build/logs/behat
           name: behat-php${{ matrix.php }}
@@ -729,7 +728,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     env:
       APP_ENV: elasticsearch
@@ -774,6 +773,59 @@ jobs:
       - name: Run Behat tests
         run: vendor/bin/behat --out=std --format=progress --profile=elasticsearch --no-interaction
 
+  elasticsearch-v7:
+    name: Behat (PHP ${{ matrix.php }}) (Elasticsearch v7)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        php:
+          - '8.3'
+      fail-fast: false
+    env:
+      APP_ENV: elasticsearch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure sysctl limits
+        run: |
+          sudo swapoff -a
+          sudo sysctl -w vm.swappiness=1
+          sudo sysctl -w fs.file-max=262144
+          sudo sysctl -w vm.max_map_count=262144
+      - name: Runs Elasticsearch
+        uses: elastic/elastic-github-actions/elasticsearch@master
+        with:
+          stack-version: '7.17.0'
+          security-enabled: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: pecl, composer
+          extensions: intl, bcmath, curl, openssl, mbstring, mongodb
+          coverage: none
+          ini-values: memory_limit=-1
+      - name: Get composer cache directory
+        id: composercache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composercache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Update project dependencies
+        run: |
+          composer global require soyuka/pmu
+          composer global config allow-plugins.soyuka/pmu true --no-interaction
+          composer global link .
+          composer update elasticsearch/elasticsearch --prefer-lowest
+      - name: Clear test app cache
+        run: tests/Fixtures/app/console cache:clear --ansi
+      - name: Run Behat tests
+        run: vendor/bin/behat --out=std --format=progress --profile=elasticsearch --no-interaction
+
   phpunit-no-deprecations:
     name: PHPUnit (PHP ${{ matrix.php }}) (no deprecations)
     runs-on: ubuntu-latest
@@ -781,7 +833,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -820,7 +872,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -863,7 +915,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -1008,7 +1060,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -1054,9 +1106,9 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
         include:
-          - php: '8.3'
+          - php: '8.4'
             coverage: true
       fail-fast: false
     steps:
@@ -1106,7 +1158,7 @@ jobs:
         continue-on-error: true
       - name: Upload coverage results to Codecov
         if: matrix.coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           directory: build/logs/phpunit
           name: phpunit-php${{ matrix.php }}
@@ -1132,7 +1184,7 @@ jobs:
     strategy:
       matrix:
         php:
-          - '8.3'
+          - '8.4'
       fail-fast: false
     steps:
       - name: Checkout
@@ -1202,10 +1254,11 @@ jobs:
         php:
           - '8.2'
           - '8.3'
+          - '8.4'
         include:
           - php: '8.2'
-            coverage: true
           - php: '8.3'
+          - php: '8.4'
             coverage: true
       fail-fast: false
     steps:

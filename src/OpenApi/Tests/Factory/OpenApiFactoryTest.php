@@ -20,6 +20,7 @@ use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Error as ErrorOperation;
+use ApiPlatform\Metadata\ErrorResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\HeaderParameter;
@@ -58,9 +59,12 @@ use ApiPlatform\OpenApi\Options;
 use ApiPlatform\OpenApi\Tests\Fixtures\Dummy;
 use ApiPlatform\OpenApi\Tests\Fixtures\DummyErrorResource;
 use ApiPlatform\OpenApi\Tests\Fixtures\DummyFilter;
+use ApiPlatform\OpenApi\Tests\Fixtures\Issue6872\Diamond;
 use ApiPlatform\OpenApi\Tests\Fixtures\OutputDto;
+use ApiPlatform\State\ApiResource\Error;
 use ApiPlatform\State\Pagination\PaginationOptions;
 use ApiPlatform\Tests\Fixtures\TestBundle\ApiResource\WithParameter;
+use ApiPlatform\Validator\Exception\ValidationException;
 use PHPUnit\Framework\TestCase;
 use Prophecy\Argument;
 use Prophecy\PhpUnit\ProphecyTrait;
@@ -82,6 +86,7 @@ class OpenApiFactoryTest extends TestCase
         $baseOperation = (new HttpOperation())->withTypes(['http://schema.example.com/Dummy'])->withInputFormats(self::OPERATION_FORMATS['input_formats'])->withOutputFormats(self::OPERATION_FORMATS['output_formats'])->withClass(Dummy::class)->withOutput([
             'class' => OutputDto::class,
         ])->withPaginationClientItemsPerPage(true)->withShortName('Dummy')->withDescription('This is a dummy');
+
         $dummyResourceWebhook = (new ApiResource())->withOperations(new Operations([
             'dummy webhook' => (new Get())->withUriTemplate('/dummy/{id}')->withShortName('short')->withOpenapi(new Webhook('first webhook')),
             'an other dummy webhook' => (new Post())->withUriTemplate('/dummies')->withShortName('short something')->withOpenapi(new Webhook('happy webhook', new Model\PathItem(post: new Operation(
@@ -269,18 +274,31 @@ class OpenApiFactoryTest extends TestCase
             ]))->withOperation($baseOperation),
         ]));
 
+        $diamondResource = (new ApiResource())
+            ->withOperations(new Operations([
+                'getDiamondCollection' => (new GetCollection(uriTemplate: '/diamonds'))
+                    ->withSecurity("is_granted('ROLE_USER')")
+                    ->withOperation($baseOperation),
+                'putDiamond' => (new Put(uriTemplate: '/diamond/{id}'))
+                    ->withOperation($baseOperation),
+            ]));
+
         $resourceNameCollectionFactoryProphecy = $this->prophesize(ResourceNameCollectionFactoryInterface::class);
-        $resourceNameCollectionFactoryProphecy->create()->shouldBeCalled()->willReturn(new ResourceNameCollection([Dummy::class, WithParameter::class]));
+        $resourceNameCollectionFactoryProphecy->create()->shouldBeCalled()->willReturn(new ResourceNameCollection([Dummy::class, WithParameter::class, Diamond::class]));
 
         $resourceCollectionMetadataFactoryProphecy = $this->prophesize(ResourceMetadataCollectionFactoryInterface::class);
         $resourceCollectionMetadataFactoryProphecy->create(Dummy::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(Dummy::class, [$dummyResource, $dummyResourceWebhook]));
-        $resourceCollectionMetadataFactoryProphecy->create(DummyErrorResource::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(DummyErrorResource::class, [new ApiResource(operations: [new ErrorOperation(name: 'err', description: 'nice one!')])]));
+        $resourceCollectionMetadataFactoryProphecy->create(DummyErrorResource::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(DummyErrorResource::class, [new ErrorResource(operations: [new ErrorOperation(name: 'err', description: 'nice one!')])]));
         $resourceCollectionMetadataFactoryProphecy->create(WithParameter::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(WithParameter::class, [$parameterResource]));
+        $resourceCollectionMetadataFactoryProphecy->create(Diamond::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(Diamond::class, [$diamondResource]));
+        $resourceCollectionMetadataFactoryProphecy->create(Error::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(Error::class, []));
+        $resourceCollectionMetadataFactoryProphecy->create(ValidationException::class)->shouldBeCalled()->willReturn(new ResourceMetadataCollection(ValidationException::class, []));
 
         $propertyNameCollectionFactoryProphecy = $this->prophesize(PropertyNameCollectionFactoryInterface::class);
         $propertyNameCollectionFactoryProphecy->create(Dummy::class, Argument::any())->shouldBeCalled()->willReturn(new PropertyNameCollection(['id', 'name', 'description', 'dummyDate', 'enum']));
         $propertyNameCollectionFactoryProphecy->create(DummyErrorResource::class, Argument::any())->shouldBeCalled()->willReturn(new PropertyNameCollection(['type', 'title', 'status', 'detail', 'instance']));
         $propertyNameCollectionFactoryProphecy->create(OutputDto::class, Argument::any())->shouldBeCalled()->willReturn(new PropertyNameCollection(['id', 'name', 'description', 'dummyDate', 'enum']));
+        $propertyNameCollectionFactoryProphecy->create(Error::class, Argument::any())->shouldBeCalled()->willReturn(new PropertyNameCollection(['type', 'title', 'status', 'detail', 'instance']));
 
         $propertyMetadataFactoryProphecy = $this->prophesize(PropertyMetadataFactoryInterface::class);
         $propertyMetadataFactoryProphecy->create(Dummy::class, 'id', Argument::any())->shouldBeCalled()->willReturn(
@@ -395,59 +413,62 @@ class OpenApiFactoryTest extends TestCase
                 ->withSchema(['type' => 'string', 'description' => 'This is an enum.'])
                 ->withOpenapiContext(['type' => 'string', 'enum' => ['one', 'two'], 'example' => 'one'])
         );
-        $propertyMetadataFactoryProphecy->create(DummyErrorResource::class, 'type', Argument::any())->shouldBeCalled()->willReturn(
-            (new ApiProperty())
-                ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
-                ->withDescription('This is an error type.')
-                ->withReadable(true)
-                ->withWritable(false)
-                ->withReadableLink(true)
-                ->withWritableLink(true)
-                ->withInitializable(true)
-                ->withSchema(['type' => 'string', 'description' => 'This is an error type.'])
-        );
-        $propertyMetadataFactoryProphecy->create(DummyErrorResource::class, 'title', Argument::any())->shouldBeCalled()->willReturn(
-            (new ApiProperty())
-                ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
-                ->withDescription('This is an error title.')
-                ->withReadable(true)
-                ->withWritable(false)
-                ->withReadableLink(true)
-                ->withWritableLink(true)
-                ->withInitializable(true)
-                ->withSchema(['type' => 'string', 'description' => 'This is an error title.'])
-        );
-        $propertyMetadataFactoryProphecy->create(DummyErrorResource::class, 'status', Argument::any())->shouldBeCalled()->willReturn(
-            (new ApiProperty())
-                ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_INT)])
-                ->withDescription('This is an error status.')
-                ->withReadable(true)
-                ->withWritable(false)
-                ->withIdentifier(true)
-                ->withSchema(['type' => 'integer', 'description' => 'This is an error status.', 'readOnly' => true])
-        );
-        $propertyMetadataFactoryProphecy->create(DummyErrorResource::class, 'detail', Argument::any())->shouldBeCalled()->willReturn(
-            (new ApiProperty())
-                ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
-                ->withDescription('This is an error detail.')
-                ->withReadable(true)
-                ->withWritable(false)
-                ->withReadableLink(true)
-                ->withWritableLink(true)
-                ->withInitializable(true)
-                ->withSchema(['type' => 'string', 'description' => 'This is an error detail.'])
-        );
-        $propertyMetadataFactoryProphecy->create(DummyErrorResource::class, 'instance', Argument::any())->shouldBeCalled()->willReturn(
-            (new ApiProperty())
-                ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
-                ->withDescription('This is an error instance.')
-                ->withReadable(true)
-                ->withWritable(false)
-                ->withReadableLink(true)
-                ->withWritableLink(true)
-                ->withInitializable(true)
-                ->withSchema(['type' => 'string', 'description' => 'This is an error instance.'])
-        );
+
+        foreach ([DummyErrorResource::class, Error::class] as $cl) {
+            $propertyMetadataFactoryProphecy->create($cl, 'type', Argument::any())->shouldBeCalled()->willReturn(
+                (new ApiProperty())
+                    ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
+                    ->withDescription('This is an error type.')
+                    ->withReadable(true)
+                    ->withWritable(false)
+                    ->withReadableLink(true)
+                    ->withWritableLink(true)
+                    ->withInitializable(true)
+                    ->withSchema(['type' => 'string', 'description' => 'This is an error type.'])
+            );
+            $propertyMetadataFactoryProphecy->create($cl, 'title', Argument::any())->shouldBeCalled()->willReturn(
+                (new ApiProperty())
+                    ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
+                    ->withDescription('This is an error title.')
+                    ->withReadable(true)
+                    ->withWritable(false)
+                    ->withReadableLink(true)
+                    ->withWritableLink(true)
+                    ->withInitializable(true)
+                    ->withSchema(['type' => 'string', 'description' => 'This is an error title.'])
+            );
+            $propertyMetadataFactoryProphecy->create($cl, 'status', Argument::any())->shouldBeCalled()->willReturn(
+                (new ApiProperty())
+                    ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_INT)])
+                    ->withDescription('This is an error status.')
+                    ->withReadable(true)
+                    ->withWritable(false)
+                    ->withIdentifier(true)
+                    ->withSchema(['type' => 'integer', 'description' => 'This is an error status.', 'readOnly' => true])
+            );
+            $propertyMetadataFactoryProphecy->create($cl, 'detail', Argument::any())->shouldBeCalled()->willReturn(
+                (new ApiProperty())
+                    ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
+                    ->withDescription('This is an error detail.')
+                    ->withReadable(true)
+                    ->withWritable(false)
+                    ->withReadableLink(true)
+                    ->withWritableLink(true)
+                    ->withInitializable(true)
+                    ->withSchema(['type' => 'string', 'description' => 'This is an error detail.'])
+            );
+            $propertyMetadataFactoryProphecy->create($cl, 'instance', Argument::any())->shouldBeCalled()->willReturn(
+                (new ApiProperty())
+                    ->withBuiltinTypes([new Type(Type::BUILTIN_TYPE_STRING)])
+                    ->withDescription('This is an error instance.')
+                    ->withReadable(true)
+                    ->withWritable(false)
+                    ->withReadableLink(true)
+                    ->withWritableLink(true)
+                    ->withInitializable(true)
+                    ->withSchema(['type' => 'string', 'description' => 'This is an error instance.'])
+            );
+        }
 
         $filterLocatorProphecy = $this->prophesize(ContainerInterface::class);
         $filters = [
@@ -521,7 +542,7 @@ class OpenApiFactoryTest extends TestCase
                     'type' => 'query',
                     'name' => 'key',
                 ],
-            ], null, null, null, null, null, null, true, [
+            ], null, null, null, null, null, null, true, true, [
                 'bearer' => [
                     'scheme' => 'bearer',
                     'bearerFormat' => 'JWT',
@@ -530,7 +551,9 @@ class OpenApiFactoryTest extends TestCase
                     'scheme' => 'basic',
                 ],
             ]),
-            new PaginationOptions(true, 'page', true, 'itemsPerPage', true, 'pagination')
+            new PaginationOptions(true, 'page', true, 'itemsPerPage', true, 'pagination'),
+            null,
+            ['json' => ['application/problem+json']]
         );
 
         $dummySchema = new Schema('openapi');
@@ -598,6 +621,8 @@ class OpenApiFactoryTest extends TestCase
                 ]),
             ],
         ]));
+        $errorSchema = clone $dummyErrorSchema->getDefinitions();
+        $errorSchema['description'] = '';
 
         $openApi = $factory(['base_url' => '/app_dev.php/']);
 
@@ -622,8 +647,9 @@ class OpenApiFactoryTest extends TestCase
         $this->assertEquals($components->getSchemas(), new \ArrayObject([
             'Dummy' => $dummySchema->getDefinitions(),
             'Dummy.OutputDto' => $dummySchema->getDefinitions(),
-            'DummyErrorResource' => $dummyErrorSchema->getDefinitions(),
             'Parameter' => $parameterSchema,
+            'DummyErrorResource' => $dummyErrorSchema->getDefinitions(),
+            'Error' => $errorSchema,
         ]));
 
         $this->assertEquals($components->getSecuritySchemes(), new \ArrayObject([
@@ -691,8 +717,16 @@ class OpenApiFactoryTest extends TestCase
                     null,
                     new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
                 ),
-                '400' => new Response('Invalid input'),
-                '422' => new Response('Unprocessable entity'),
+                '400' => new Response(
+                    'Invalid input',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
             ],
             'Creates a Dummy resource.',
             'Creates a Dummy resource.',
@@ -723,7 +757,11 @@ class OpenApiFactoryTest extends TestCase
                         'application/ld+json' => new MediaType(new \ArrayObject(new \ArrayObject(['$ref' => '#/components/schemas/Dummy.OutputDto']))),
                     ])
                 ),
-                '404' => new Response('Resource not found'),
+                '404' => new Response(
+                    'Not found',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
             ],
             'Retrieves a Dummy resource.',
             'Retrieves a Dummy resource.',
@@ -743,9 +781,21 @@ class OpenApiFactoryTest extends TestCase
                     null,
                     new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
                 ),
-                '400' => new Response('Invalid input'),
-                '422' => new Response('Unprocessable entity'),
-                '404' => new Response('Resource not found'),
+                '400' => new Response(
+                    'Invalid input',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
+                '404' => new Response(
+                    'Not found',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
             ],
             'Replaces the Dummy resource.',
             'Replaces the Dummy resource.',
@@ -765,7 +815,11 @@ class OpenApiFactoryTest extends TestCase
             ['Dummy'],
             [
                 '204' => new Response('Dummy resource deleted'),
-                '404' => new Response('Resource not found'),
+                '404' => new Response(
+                    'Not found',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
             ],
             'Removes the Dummy resource.',
             'Removes the Dummy resource.',
@@ -788,7 +842,11 @@ class OpenApiFactoryTest extends TestCase
                     'Foo' => ['$ref' => '#/components/schemas/Dummy'],
                 ])),
                 '205' => new Response(),
-                '404' => new Response('Resource not found'),
+                '404' => new Response(
+                    'Not found',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
             ],
             'Dummy',
             'Custom description',
@@ -831,9 +889,21 @@ class OpenApiFactoryTest extends TestCase
                     null,
                     new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
                 ),
-                '400' => new Response('Invalid input'),
-                '422' => new Response('Unprocessable entity'),
-                '404' => new Response('Resource not found'),
+                '400' => new Response(
+                    'Invalid input',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
+                '404' => new Response(
+                    'Not found',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$request.path.id']), null, 'This is a dummy')])
+                ),
             ],
             'Replaces the Dummy resource.',
             'Replaces the Dummy resource.',
@@ -940,8 +1010,16 @@ class OpenApiFactoryTest extends TestCase
                     null,
                     new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
                 ),
-                '400' => new Response('Invalid input'),
-                '422' => new Response('Unprocessable entity'),
+                '400' => new Response(
+                    'Invalid input',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
             ],
             'Creates a Dummy resource.',
             'Creates a Dummy resource.',
@@ -984,8 +1062,16 @@ class OpenApiFactoryTest extends TestCase
                     null,
                     new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
                 ),
-                '400' => new Response('Invalid input'),
-                '422' => new Response('Unprocessable entity'),
+                '400' => new Response(
+                    'Invalid input',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
             ],
             'Creates a Dummy resource.',
             'Creates a Dummy resource.',
@@ -1021,8 +1107,16 @@ class OpenApiFactoryTest extends TestCase
                     ])
                 ),
                 '400' => new Response('Error'),
-                '422' => new Response('Unprocessable entity'),
-                '404' => new Response('Resource not found'),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
+                '404' => new Response(
+                    'Not found',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
             ],
             'Replaces the Dummy resource.',
             'Replaces the Dummy resource.',
@@ -1058,7 +1152,11 @@ class OpenApiFactoryTest extends TestCase
                     ])
                 ),
                 '400' => new Response('Error'),
-                '422' => new Response('Unprocessable entity'),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
             ],
             'Creates a Dummy resource.',
             'Creates a Dummy resource.',
@@ -1116,8 +1214,16 @@ class OpenApiFactoryTest extends TestCase
                     null,
                     new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
                 ),
-                '400' => new Response('Invalid input'),
-                '422' => new Response('Unprocessable entity'),
+                '400' => new Response(
+                    'Invalid input',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
+                '422' => new Response(
+                    'Unprocessable entity',
+                    content: new \ArrayObject(['application/problem+json' => new MediaType(schema: new \ArrayObject(['$ref' => '#/components/schemas/Error']))]),
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
+                ),
             ],
             'Creates a Dummy resource.',
             'Creates a Dummy resource.',
@@ -1148,11 +1254,11 @@ class OpenApiFactoryTest extends TestCase
                 '418' => new Response(
                     'A Teapot Exception',
                     new \ArrayObject([
-                        'application/ld+json' => new MediaType(new \ArrayObject(new \ArrayObject([
+                        'application/problem+json' => new MediaType(new \ArrayObject(new \ArrayObject([
                             '$ref' => '#/components/schemas/DummyErrorResource',
                         ]))),
                     ]),
-                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(), null, 'This is a dummy')])
+                    links: new \ArrayObject(['getDummyItem' => new Model\Link('getDummyItem', new \ArrayObject(['id' => '$response.body#/id']), null, 'This is a dummy')])
                 ),
             ],
             'Retrieves the collection of Dummy resources.',
@@ -1174,5 +1280,20 @@ class OpenApiFactoryTest extends TestCase
             ],
             deprecated: false
         ), $paths->getPath('/erroredDummies')->getGet());
+
+        $diamondsGetPath = $paths->getPath('/diamonds');
+        $diamondGetOperation = $diamondsGetPath->getGet();
+        $diamondGetResponses = $diamondGetOperation->getResponses();
+
+        $this->assertNotNull($diamondGetOperation);
+        $this->assertArrayHasKey('403', $diamondGetResponses);
+        $this->assertSame('Forbidden', $diamondGetResponses['403']->getDescription());
+
+        $diamondsPutPath = $paths->getPath('/diamond/{id}');
+        $diamondPutOperation = $diamondsPutPath->getPut();
+        $diamondPutResponses = $diamondPutOperation->getResponses();
+
+        $this->assertNotNull($diamondPutOperation);
+        $this->assertArrayNotHasKey('403', $diamondPutResponses);
     }
 }
