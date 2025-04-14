@@ -1,5 +1,67 @@
 # Changelog
 
+## v4.1.6
+
+### Bug fixes
+
+* [44e560839](https://github.com/api-platform/core/commit/44e56083996f2f00a1d87a149fd41aeb0149e4dd) fix(laravel): undefined variable app
+
+### Features
+
+## v4.1.5
+
+### Bug fixes
+
+* [60747cc8c](https://github.com/api-platform/core/commit/60747cc8c2fb855798c923b5537888f8d0969568) fix(graphql): access to unauthorized resource using node Relay [CVE-2025-31481](https://github.com/api-platform/core/security/advisories/GHSA-cg3c-245w-728m)
+* [7af65aad1](https://github.com/api-platform/core/commit/7af65aad13037d7649348ee3dcd88e084ef771f8) fix(graphql): property security might be cached w/ different objects [CVE-2025-31485](https://github.com/api-platform/core/security/advisories/GHSA-428q-q3vv-3fq3)
+
+## v4.1.4
+
+### Bug fixes
+
+* [eaf007536](https://github.com/api-platform/core/commit/eaf00753693a493788f5ad60c4c45295048eb1a7) fix(state): support filter interface on serializer filter parameter provider (#7047)
+* [b0fa2291e](https://github.com/api-platform/core/commit/b0fa2291e50a57789eb14777277769627931cfbd) fix(laravel): error handler only on api routes (#7049)
+* [1eb9da13a](https://github.com/api-platform/core/commit/1eb9da13a7e06a8d380dfa27e23a0f8457ceb2bd) fix(laravel): missing filters (#7056)
+* [a46a76889](https://github.com/api-platform/core/commit/a46a7688958428b76eb7b6181ae1636cd3b7a4bf) fix(symfony): serialization of closure inside the profiler (#7054)
+* [c1b50e2cb](https://github.com/api-platform/core/commit/c1b50e2cb082b00a371bf62c7e86c2f3fea5dadf) fix(doctrine): joinColumn might be an array (#7060)
+* [f4c426d71](https://github.com/api-platform/core/commit/f4c426d719b01debaa993b00d03cce8964057ecc) Revert "fix(doctrine): throw an exception when a filter is not found in a par…" (#7046)
+
+## v4.1.3
+
+### Bug fixes
+
+* [8a2265041](https://github.com/api-platform/core/commit/8a22650419fd32efdafad43493f2327b38dd3ee6) fix(laravel): defer "filters" dependent services (#7045)
+
+## v4.1.2
+
+### Bug fixes
+
+* [42f25cf04](https://github.com/api-platform/core/commit/42f25cf0461c382ce10e2378be5e9428c23eb94a) fix: react@18 for UMD + add Laravel support in update-js.sh (#7028)
+* [77ffc380b](https://github.com/api-platform/core/commit/77ffc380bcd3c22a1eb4fb0c4f1cd265cfd1a898) fix(laravel): do not require tests while autoconfiguring (#7024)
+* [935b9b55d](https://github.com/api-platform/core/commit/935b9b55da0eacce3dd2bbed4584b10b154d97c2) fix(laravel): json api default parameters (#7027)
+* [a2824ff4b](https://github.com/api-platform/core/commit/a2824ff4be6276e37e37a3b4e4fb2e9a0096789c) fix(laravel): defer autoconfiguration (#7040)
+
+
+## v4.1.1
+
+### Bug fixes
+
+* [1e0bc9dc8](https://github.com/api-platform/core/commit/1e0bc9dc8ebe2f947ac0b3bc153047b0b28b0a17) fix(laravel): query extensions with item operations (#7001)
+* [1e7076c65](https://github.com/api-platform/core/commit/1e7076c65aea9a2f09b0dcc6598ef2a705e0bb45) fix(laravel): register ErrorProvider (#7018)
+* [2771363b0](https://github.com/api-platform/core/commit/2771363b03f1b1c27313ecd457f7a4934524151c) fix(validation): deprecate string message for ValidationException constructor (#7005)
+* [500062da2](https://github.com/api-platform/core/commit/500062da2074585979e9a92939bc3b7a3c7554c5) fix(symfony): add a `alwaysBootKernel` property for BC layer (#7007)
+* [8697d6630](https://github.com/api-platform/core/commit/8697d66304d276feeef6f838c8c54291d3563aab) fix(openapi): boolean "true" value in HttpOperation::openapi (#7003)
+* [b1e0c889c](https://github.com/api-platform/core/commit/b1e0c889cc96602afc9c68fccb9da25a6b6fd354) fix(doctrine): correct the use statement for ManagerRegistry (#7004)
+* [fcbd804b2](https://github.com/api-platform/core/commit/fcbd804b29907baba8878ca12ff013732e0326e4) fix(jsonld): duplicate error fields when prefix is enabled (#7021)
+
+### Features
+
+* [129853668](https://github.com/api-platform/core/commit/129853668c3fd66bcfe1a298a0f662c29545f7a4) feat(laravel): stateOptions modelClass for eloquent (#7020)
+* [42991b941](https://github.com/api-platform/core/commit/42991b9418c340e44c9e30360e5dd4d869433859) feat(laravel): openapi export command (#7016)
+* [dd1b89f9b](https://github.com/api-platform/core/commit/dd1b89f9b771544cb8449d7e9f8f4bbd80c615d2) feat(laravel): auto configure our tagged interfaces (#7014)
+
+Also contains [v4.0.20 changes](#v4020).
+
 ## v4.1.0
 
 ### Bug fixes
@@ -99,6 +161,35 @@ On write operations, we added the [expectsHeader](https://www.hydra-cg.com/spec/
 * [c78ed0b78](https://github.com/api-platform/core/commit/c78ed0b78baf5d2e1b7444a9882ba039c70a3887) feat(laravel): boolean filter (#6806)
 * [d0a442786](https://github.com/api-platform/core/commit/d0a44278630d201b91cbba0774a09f4eeaac88f7) feat(doctrine): enhance getLinksHandler with method validation and typo suggestions (#6874)
 * [f67f6f1ac](https://github.com/api-platform/core/commit/f67f6f1acb6476182c18a3503f2a8bc80ae89a0b)  feat(doctrine): doctrine filters like laravel eloquent filters  (#6775)
+
+## v4.0.22
+
+### Bug fixes
+
+* [60747cc8c](https://github.com/api-platform/core/commit/60747cc8c2fb855798c923b5537888f8d0969568) fix(graphql): access to unauthorized resource using node Relay [CVE-2025-31481](https://github.com/api-platform/core/security/advisories/GHSA-cg3c-245w-728m)
+* [7af65aad1](https://github.com/api-platform/core/commit/7af65aad13037d7649348ee3dcd88e084ef771f8) fix(graphql): property security might be cached w/ different objects [CVE-2025-31485](https://github.com/api-platform/core/security/advisories/GHSA-428q-q3vv-3fq3)
+* [f4c426d71](https://github.com/api-platform/core/commit/f4c426d719b01debaa993b00d03cce8964057ecc) Revert "fix(doctrine): throw an exception when a filter is not found in a par…" (#7046)
+
+## v4.0.21
+
+### Bug fixes
+
+* [7cb5a6db8](https://github.com/api-platform/core/commit/7cb5a6db87241d95e6c324318fe861bd4f1820cf) fix: allow parameter provider as object (#7032)
+* [bb83e9a03](https://github.com/api-platform/core/commit/bb83e9a034c511156aa20a8555bf367374ef5458) fix(symfony): allow to merge array with string in global defaults (#7037)
+* [da2e86809](https://github.com/api-platform/core/commit/da2e86809d4a8dec294dc2fc148d92406f1f7fd1) fix: header parameter should be case insensitive (#7031)
+
+
+### Features
+
+## v4.0.20
+
+### Bug fixes
+
+* [284937039](https://github.com/api-platform/core/commit/284937039c61d4516687c648f4a7581ec1686f3d) fix(doctrine): mapping ArrayAccess deprecation (#6982)
+* [a434173b8](https://github.com/api-platform/core/commit/a434173b82f735041a79cb5f469ee0e731ca5956) fix(doctrine): Add a proper exception when a doctrine manager could not be found for a resource class (#6995)
+
+
+### Features
 
 ## v4.0.19
 
